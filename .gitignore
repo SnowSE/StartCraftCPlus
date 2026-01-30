@@ -13,7 +13,7 @@ starcraft/*.MPQ
 starcraft/*.mpq
 starcraft/Errors
 starcraftfull
-starcraft/*g
+starcraft/*
 *.sdf
 *.suo
 *.opensdf
