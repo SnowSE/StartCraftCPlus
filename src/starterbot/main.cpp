@@ -3,15 +3,35 @@
 #include "StarterBot.h"
 #include "ReplayParser.h"
 #include <iostream>
+#include <fstream>
 #include <thread>
 #include <chrono>
+#include <unordered_map>
+#include <string>
+#include <algorithm>
+#include <cctype>
+#include <vector>
+#include <filesystem>
 
 void PlayGame();
 void ParseReplay();
+void updateIniFile(const std::unordered_map<std::string, std::string>& settings);
 
 int main(int argc, char * argv[])
 {
     size_t gameCount = 0;
+
+    // Update the BWAPI ini file settings based on the default settings
+    // Look in Starbraft/bwapi-data/bwapi.ini for infomation about these settings
+    std::unordered_map<std::string, std::string> settings = {
+        { "race", "Protoss" },
+        { "auto_menu", "ON" },
+        { "map", "maps/(2)Boxer.scm" },
+        { "enemy_count", "1" },
+        { "game_type", "FREE_FOR_ALL" }
+    };
+
+    updateIniFile(settings);
 
     // if we are not currently connected to BWAPI, try to reconnect
     while (!BWAPI::BWAPIClient.connect())
@@ -122,3 +142,122 @@ void ParseReplay()
         }
     }
 }
+
+void updateIniFile(const std::unordered_map<std::string, std::string>& settings)
+{
+    namespace fs = std::filesystem;
+
+    const std::vector<fs::path> candidatePaths = {
+        fs::path("bwapi-data") / "bwapi.ini",
+        fs::path("Starcraft") / "bwapi-data" / "bwapi.ini",
+        fs::path("..") / "Starcraft" / "bwapi-data" / "bwapi.ini",
+        fs::path("..") / ".." / "Starcraft" / "bwapi-data" / "bwapi.ini"
+    };
+
+    fs::path iniPath;
+    for (const auto& candidate : candidatePaths)
+    {
+        if (fs::exists(candidate))
+        {
+            iniPath = candidate;
+            break;
+        }
+    }
+
+    if (iniPath.empty())
+    {
+        std::cerr << "Failed to locate bwapi.ini. Current path: "
+                  << fs::current_path().string() << "\n";
+        return;
+    }
+
+    const std::string iniFilePath = iniPath.string();
+
+    auto trim = [](std::string value)
+    {
+        value.erase(value.begin(), std::find_if(value.begin(), value.end(), [](unsigned char ch)
+        {
+            return !std::isspace(ch);
+        }));
+        value.erase(std::find_if(value.rbegin(), value.rend(), [](unsigned char ch)
+        {
+            return !std::isspace(ch);
+        }).base(), value.end());
+        return value;
+    };
+
+    std::ifstream inFile(iniFilePath);
+    if (!inFile.is_open())
+    {
+        std::cerr << "Failed to open " << iniFilePath << " for reading\n";
+        return;
+    }
+
+    std::vector<std::string> lines;
+    lines.reserve(256);
+
+    std::unordered_map<std::string, bool> updated;
+    updated.reserve(settings.size());
+    for (const auto& kvp : settings)
+    {
+        updated[kvp.first] = false;
+    }
+
+    std::string line;
+    while (std::getline(inFile, line))
+    {
+        std::string original = line;
+        std::string trimmed = trim(line);
+
+        if (!trimmed.empty() && trimmed[0] != ';' && trimmed[0] != '[')
+        {
+            auto eqPos = trimmed.find('=');
+            if (eqPos != std::string::npos)
+            {
+                std::string key = trim(trimmed.substr(0, eqPos));
+                auto it = settings.find(key);
+                if (it != settings.end())
+                {
+                    auto originalEqPos = original.find('=');
+                    std::string prefix = (originalEqPos != std::string::npos)
+                        ? original.substr(0, originalEqPos + 1)
+                        : key + " =";
+                    original = prefix + " " + it->second;
+                    updated[key] = true;
+                }
+            }
+        }
+
+        lines.push_back(original);
+    }
+    inFile.close();
+
+    for (const auto& kvp : settings)
+    {
+        if (!updated[kvp.first])
+        {
+            lines.push_back(kvp.first + " = " + kvp.second);
+        }
+    }
+
+    std::ofstream outFile(iniFilePath, std::ios::trunc);
+    if (!outFile.is_open())
+    {
+        std::cerr << "Failed to open " << iniFilePath << " for writing\n";
+        return;
+    }
+
+    for (const auto& outLine : lines)
+    {
+        outFile << outLine << "\n";
+    }
+
+    std::cout << "Updated ini file: " << iniFilePath << "\n";
+    for (const auto& kvp : settings)
+    {
+        std::cout << kvp.first << " = " << kvp.second << "\n";
+    }
+
+}
+
+
