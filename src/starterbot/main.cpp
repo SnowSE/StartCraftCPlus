@@ -24,10 +24,10 @@ int main(int argc, char * argv[])
     // Update the BWAPI ini file settings based on the default settings
     // Look in Starbraft/bwapi-data/bwapi.ini for infomation about these settings
     std::unordered_map<std::string, std::string> settings = {
-        { "race", "Protoss" },
-        { "auto_menu", "ON" },
-        { "map", "maps/(2)Boxer.scm" },
-        { "enemy_count", "1" },
+        { "race", "Random" },
+        { "auto_menu", "SINGLE_PLAYER" },
+        { "map", "maps/(8)Homeworld.scm" },
+        { "enemy_count", "7" },
         { "game_type", "FREE_FOR_ALL" }
     };
 
